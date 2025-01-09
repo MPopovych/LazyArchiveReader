@@ -9,9 +9,10 @@ This library provides an api to read the archive structure and to extract only s
 The code snipped below extracts a file of specific extension. File metadata is available to control what is extracted.
 With the metadata it's possible to check size for zip bombs, track nested archives, peek into structure without extraction.
 
-``` kotlin 
-val testArchive = File("samples/some.zip")"
-val reader = LazyArchiveReader(testArchive, temporaryDirectory = tempDirectory)
+```kotlin 
+val testArchive = File("samples/some.zip")
+val temporaryDirectory = File("temp-storage/")
+val reader = LazyArchiveReader(testArchive, temporaryDirectory)
 reader
     .extract { m -> m.fileName.endsWith(".txt") }
     .successOrThrow()
@@ -38,7 +39,7 @@ For more details see the source code
 **Step 2.** Perform the extraction with a predicate
 ```kotlin
 val result = reader.extract { meta ->
-	meta.fileName.endsWith(".txt") && meta.fileSize < ALLOWED_FILE_SIZE 
+    meta.fileName.endsWith(".txt") && meta.fileSize < ALLOWED_FILE_SIZE 
 }
 ```
 To deflate the file the predicate should return **true**. 
@@ -70,3 +71,9 @@ val files = result.use { result ->
 
 ## WIP
 This project is still in development and might never be finalised. Feel free to contribute with a PR to this project. 
+
+## Plans and tasks
+- Implement 7z support
+- Implement a read-only function to produce a data class that mirrors the archive structure
+- More unit tests
+- Benchmarks

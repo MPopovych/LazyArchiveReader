@@ -8,7 +8,10 @@ import kotlin.io.path.extension
 import kotlin.io.path.name
 import kotlin.io.path.pathString
 
-
+/**
+ * Zip specific code to iterate through the ZipEntry-ies
+ * Performs file extraction from nested archives without any temporary files.
+ */
 object ZipArchiveReader {
 	fun extractZip(
 		readContext: ReadContext,

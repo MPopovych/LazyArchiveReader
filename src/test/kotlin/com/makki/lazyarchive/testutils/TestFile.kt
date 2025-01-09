@@ -1,4 +1,6 @@
-package com.makki.lazyarchive
+package com.makki.lazyarchive.testutils
+
+import com.makki.lazyarchive.ArchiveType
 
 
 sealed interface TestFile {
