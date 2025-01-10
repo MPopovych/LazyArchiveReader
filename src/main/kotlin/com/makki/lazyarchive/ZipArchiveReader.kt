@@ -8,7 +8,10 @@ import kotlin.io.path.extension
 import kotlin.io.path.name
 import kotlin.io.path.pathString
 
-
+/**
+ * Zip specific code to iterate through the ZipEntry-ies
+ * Performs file extraction from nested archives without any temporary files.
+ */
 object ZipArchiveReader {
 	fun extractZip(
 		readContext: ReadContext,
@@ -17,18 +20,18 @@ object ZipArchiveReader {
 		fullParentPath: String,
 		currentDepth: Int,
 	) {
-		val zais = ZipArchiveInputStream(inputStream)
+		val zipStream = ZipArchiveInputStream(inputStream)
+		var zipEntry = zipStream.tryNextEntry(errorHandler = readContext.errorHandler)
 
-		var entry = zais.tryNextEntry(errorHandler = readContext.errorHandler)
-		while (entry != null) {
-			val path = Path(entry.name)
+		while (zipEntry != null) {
+			val path = Path(zipEntry.name)
 			val header = FileMeta(
 				fileName = path.name,
 				parentArchiveName = parentArchiveName,
 				pathInArchive = path.pathString,
-				fullPath = fullParentPath + "/" + entry.name,
-				fileSize = entry.size,
-				compressedSize = entry.compressedSize,
+				fullPath = fullParentPath + "/" + zipEntry.name,
+				fileSize = zipEntry.size,
+				compressedSize = zipEntry.compressedSize,
 				fileIndex = readContext.iteration++
 			)
 			val archiveType = ArchiveType.fromExtension(path.extension)
@@ -42,13 +45,13 @@ object ZipArchiveReader {
 					it.createNewFile()
 				}
 				FileOutputStream(extract).use { fos ->
-					zais.copyTo(fos)
+					zipStream.copyTo(fos)
 				}
 				readContext.buffer.add(TemporaryFile(extract, extractDir, header))
 			}
 
 			if (archiveType != null && currentDepth < readContext.archiveDepth) {
-				val nextStream = if (extract != null) FileInputStream(extract) else zais
+				val nextStream = if (extract != null) FileInputStream(extract) else zipStream
 
 				// might be zipped, might be 7z
 				GeneralArchiveReader.extractArchive(
@@ -59,21 +62,24 @@ object ZipArchiveReader {
 					currentDepth = currentDepth + 1
 				)
 			}
-			entry = zais.nextEntry
+
+			if (readContext.checkAndSetLoopBreak()) return
+			zipEntry = zipStream.tryNextEntry(errorHandler = readContext.errorHandler)
 		}
 	}
 
 	private tailrec fun ZipArchiveInputStream.tryNextEntry(
-		iteration: Int = 0,
+		iteration: Int = 0, // loop breaking
 		errorHandler: ((IOException) -> Unit)?,
 	): ZipArchiveEntry? {
-		if (iteration > 10) return null
-		var entry: ZipArchiveEntry? = null
+		if (iteration >= 10) return null
+
 		try {
-			entry = this.nextEntry
+			val entry = this.nextEntry
+			if (entry != null) return entry
 		} catch (e: IOException) {
 			errorHandler?.invoke(e)
 		}
-		return entry ?: this.tryNextEntry(iteration + 1, errorHandler)
+		return this.tryNextEntry(iteration + 1, errorHandler)
 	}
 }

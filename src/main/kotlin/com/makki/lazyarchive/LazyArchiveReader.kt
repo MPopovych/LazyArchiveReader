@@ -69,6 +69,14 @@ class ReadContext(
 	var fullRead: Boolean = true
 	var iteration: Int = 0
 	fun nextExtractionDirectory() = File(temporaryDirectory, "extract_${buffer.size}")
+
+	fun checkAndSetLoopBreak(): Boolean {
+		if (iteration >= loopBreaker) {
+			fullRead = false
+			return true
+		}
+		return false
+	}
 }
 
 sealed interface LazyArchiveResult : Closeable {

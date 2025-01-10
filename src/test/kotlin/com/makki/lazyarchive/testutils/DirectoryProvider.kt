@@ -1,4 +1,4 @@
-package com.makki.lazyarchive
+package com.makki.lazyarchive.testutils
 
 import java.io.File
 import java.nio.file.Files

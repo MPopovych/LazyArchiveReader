@@ -9,9 +9,10 @@ This library provides an api to read the archive structure and to extract only s
 The code snipped below extracts a file of specific extension. File metadata is available to control what is extracted.
 With the metadata it's possible to check size for zip bombs, track nested archives, peek into structure without extraction.
 
-``` kotlin 
-val testArchive = File("samples/some.zip")"
-val reader = LazyArchiveReader(testArchive, temporaryDirectory = tempDirectory)
+```kotlin 
+val testArchive = File("samples/some.zip")
+val temporaryDirectory = File("temp-storage/")
+val reader = LazyArchiveReader(testArchive, temporaryDirectory)
 reader
     .extract { m -> m.fileName.endsWith(".txt") }
     .successOrThrow()
@@ -37,8 +38,9 @@ For more details see the source code
 
 **Step 2.** Perform the extraction with a predicate
 ```kotlin
+val reader: LazyArchiveReader
 val result = reader.extract { meta ->
-	meta.fileName.endsWith(".txt") && meta.fileSize < ALLOWED_FILE_SIZE 
+    meta.fileName.endsWith(".txt") && meta.fileSize < ALLOWED_FILE_SIZE 
 }
 ```
 To deflate the file the predicate should return **true**. 
@@ -53,20 +55,26 @@ It can be handled by a when statement, casting or using a method that will throw
 
 ```kotlin
 result.successOrThrow().use { success ->
-    success.extracted.forEach { extraction ->
+    success.extracted.map { extraction ->
         val f = extraction.file
-        // read and parse the file - perform the action
+	    // read and parse the file - perform the action
+        return@map parse(f)
     }
 }
 // or
-val files = result.use { result ->
+val parseResults = result.use { result ->
     when (result) {
         is LazyArchiveResult.Fail -> throw result.error
-        is LazyArchiveResult.Success -> return@use result.extracted.map { it.file }
+        is LazyArchiveResult.Success -> return@use result.extracted.map { parse(it.file) }
     }
 }
-
 ```
 
 ## WIP
 This project is still in development and might never be finalised. Feel free to contribute with a PR to this project. 
+
+## Plans and tasks
+- Implement 7z support
+- Implement a read-only function to produce a data class that mirrors the archive structure
+- More unit tests
+- Benchmarks

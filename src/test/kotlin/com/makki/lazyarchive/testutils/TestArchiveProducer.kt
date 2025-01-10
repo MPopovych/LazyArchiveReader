@@ -1,5 +1,6 @@
-package com.makki.lazyarchive
+package com.makki.lazyarchive.testutils
 
+import com.makki.lazyarchive.ArchiveType
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import java.io.File
