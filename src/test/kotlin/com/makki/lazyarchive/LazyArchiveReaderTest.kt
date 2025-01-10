@@ -120,4 +120,29 @@ class LazyArchiveReaderTest {
 		// clean up
 		testArchive.delete()
 	}
+
+	@Test
+	fun testLoopBreaker() {
+		// prepare example archive
+		val testArchive = TestArchiveProducer.createArchive(archiveOneNestedZip, tempDirectory)
+
+		// extract with allocating all files
+		val reader = LazyArchiveReader(
+			testArchive,
+			archiveDepth = 2,
+			temporaryDirectory = tempDirectory,
+			errorHandler = { e -> throw e },
+			loopBreaker = 1
+		)
+		reader
+			.extract { true }
+			.successOrThrow()
+			.use { result ->
+				Assertions.assertFalse(result.fullRead)
+				Assertions.assertEquals(1, result.extracted.size)
+			}
+
+		// clean up
+		testArchive.delete()
+	}
 }

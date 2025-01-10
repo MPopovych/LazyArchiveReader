@@ -38,6 +38,7 @@ For more details see the source code
 
 **Step 2.** Perform the extraction with a predicate
 ```kotlin
+val reader: LazyArchiveReader
 val result = reader.extract { meta ->
     meta.fileName.endsWith(".txt") && meta.fileSize < ALLOWED_FILE_SIZE 
 }
@@ -54,19 +55,19 @@ It can be handled by a when statement, casting or using a method that will throw
 
 ```kotlin
 result.successOrThrow().use { success ->
-    success.extracted.forEach { extraction ->
+    success.extracted.map { extraction ->
         val f = extraction.file
-        // read and parse the file - perform the action
+	    // read and parse the file - perform the action
+        return@map parse(f)
     }
 }
 // or
-val files = result.use { result ->
+val parseResults = result.use { result ->
     when (result) {
         is LazyArchiveResult.Fail -> throw result.error
-        is LazyArchiveResult.Success -> return@use result.extracted.map { it.file }
+        is LazyArchiveResult.Success -> return@use result.extracted.map { parse(it.file) }
     }
 }
-
 ```
 
 ## WIP

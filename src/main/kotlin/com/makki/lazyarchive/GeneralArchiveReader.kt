@@ -10,10 +10,7 @@ object GeneralArchiveReader {
 		fullParentPath: String,
 		currentDepth: Int,
 	) {
-		if (readContext.iteration > readContext.loopBreaker) {
-			readContext.fullRead = false
-			return
-		}
+		if (readContext.checkAndSetLoopBreak()) return
 
 		val extension = parentArchiveName.substringAfterLast(".")
 		val type = ArchiveType.fromExtension(extension)
