@@ -8,7 +8,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 
-class LazyArchiveReaderTest {
+class LazyArchiveExtractTests {
 	private val sampleText = "test text text text text text"
 	private val sampleText2 = "test nested text"
 	private val archiveOneNestedZip = TestArchive("test", ArchiveType.ZIP)
@@ -18,7 +18,7 @@ class LazyArchiveReaderTest {
 		.addPlainFile("text", "txt", sampleText)
 
 	private val defaultErrorHandler: (IOException) -> Unit = { e -> Assertions.fail(e) }
-	private val tempDirectory = DirectoryProvider.initInBuildDirectory("test-temp")
+	private val tempDirectory = DirectoryProvider.initInBuildDirectory("test-temp-extract")
 
 	@BeforeTest
 	fun initial() {
@@ -37,7 +37,7 @@ class LazyArchiveReaderTest {
 		// prepare example archive
 		val testArchive = TestArchiveProducer.createArchive(archiveOneNestedZip, tempDirectory)
 
-		// extract with allocating all files
+		// extract with unpacking all files
 		val reader = LazyArchiveReader(
 			testArchive,
 			archiveDepth = 2,
@@ -60,11 +60,36 @@ class LazyArchiveReaderTest {
 	}
 
 	@Test
+	fun testNoneUnpacked() {
+		// prepare example archive
+		val testArchive = TestArchiveProducer.createArchive(archiveOneNestedZip, tempDirectory)
+
+		// extract with unpacking no files
+		val reader = LazyArchiveReader(
+			testArchive,
+			archiveDepth = 3,
+			temporaryDirectory = tempDirectory,
+			errorHandler = { e -> throw e },
+			loopBreaker = 100
+		)
+		reader
+			.extract { false } // extract no files
+			.successOrThrow()
+			.use { result ->
+				Assertions.assertTrue(result.fullRead)
+				Assertions.assertEquals(0, result.extracted.size)
+			}
+
+		// clean up
+		testArchive.delete()
+	}
+
+	@Test
 	fun test1DepthUnpacked() {
 		// prepare example archive
 		val testArchive = TestArchiveProducer.createArchive(archiveOneNestedZip, tempDirectory)
 
-		// extract with allocating all files
+		// extract with unpacking only level 1 files
 		val reader = LazyArchiveReader(
 			testArchive,
 			archiveDepth = 1,
@@ -88,7 +113,7 @@ class LazyArchiveReaderTest {
 		// prepare example archive
 		val testArchive = TestArchiveProducer.createArchive(archiveOneNestedZip, tempDirectory)
 
-		// extract with allocating all files
+		// extract with unpacking only txt files on level 1
 		val reader = LazyArchiveReader(
 			testArchive,
 			archiveDepth = 1,
@@ -122,11 +147,11 @@ class LazyArchiveReaderTest {
 	}
 
 	@Test
-	fun testLoopBreaker() {
+	fun testLoopBreaker1() {
 		// prepare example archive
 		val testArchive = TestArchiveProducer.createArchive(archiveOneNestedZip, tempDirectory)
 
-		// extract with allocating all files
+		// extract with loop break after first
 		val reader = LazyArchiveReader(
 			testArchive,
 			archiveDepth = 2,
@@ -141,6 +166,70 @@ class LazyArchiveReaderTest {
 				Assertions.assertFalse(result.fullRead)
 				Assertions.assertEquals(1, result.extracted.size)
 			}
+
+		// clean up
+		testArchive.delete()
+	}
+
+	@Test
+	fun testLoopBreaker0() {
+		// prepare example archive
+		val testArchive = TestArchiveProducer.createArchive(archiveOneNestedZip, tempDirectory)
+
+		// extract with loop break before first
+		val reader = LazyArchiveReader(
+			testArchive,
+			archiveDepth = 2,
+			temporaryDirectory = tempDirectory,
+			errorHandler = { e -> throw e },
+			loopBreaker = 0
+		)
+		reader
+			.extract { true }
+			.successOrThrow()
+			.use { result ->
+				Assertions.assertFalse(result.fullRead)
+				Assertions.assertEquals(0, result.extracted.size)
+			}
+
+		// clean up
+		testArchive.delete()
+	}
+
+	@Test
+	fun testCleanUpClosable() {
+		// prepare example archive
+		val testArchive = TestArchiveProducer.createArchive(archiveOneNestedZip, tempDirectory)
+
+		// extract with loop break before first
+		val reader = LazyArchiveReader(
+			testArchive,
+			archiveDepth = 2,
+			temporaryDirectory = tempDirectory,
+			errorHandler = { e -> throw e },
+			loopBreaker = 100
+		)
+		val result = reader
+			.extract { true }
+			.successOrThrow()
+
+		Assertions.assertTrue(result.temporaryFolders.isNotEmpty())
+		Assertions.assertTrue(result.extracted.isNotEmpty())
+		result.temporaryFolders.forEach {
+			Assertions.assertTrue(it.exists())
+		}
+		result.extracted.forEach {
+			Assertions.assertTrue(it.file.exists())
+		}
+		result.use { file ->
+			Assertions.assertTrue(file.fullRead)
+		}
+		result.temporaryFolders.forEach {
+			Assertions.assertFalse(it.exists())
+		}
+		result.extracted.forEach {
+			Assertions.assertFalse(it.file.exists())
+		}
 
 		// clean up
 		testArchive.delete()

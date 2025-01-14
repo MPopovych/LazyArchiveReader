@@ -1,6 +1,9 @@
 package com.makki.lazyarchive
 
-import java.io.*
+import java.io.BufferedInputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.IOException
 
 typealias Predicate = (header: FileMeta) -> Boolean
 typealias ErrorHandler = (IOException) -> Unit
@@ -29,43 +32,74 @@ class LazyArchiveReader(
 		require(temporaryDirectory.isDirectory)
 	}
 
+	/**
+	 * Perform an extraction of files based on the [filter] argument and settings passed to [LazyArchiveReader].
+	 * @return [LazyArchiveResult] which has two states.
+	 * Both will contain a buffer of extracted files to the point of finish.
+	 */
 	fun extract(filter: Predicate): LazyArchiveResult {
 		if (type == null) return LazyArchiveResult.Fail(
+			IllegalStateException("Unsupported archive type: ${archive.name}"), emptyList(), emptyList()
+		)
+		val readContext = initContext<TemporaryFile>(filter)
+		try {
+			BufferedInputStream(FileInputStream(archive), bufferSize)
+				.use { bufferedIS ->
+					GenericArchiveReader.extractArchive(
+						readContext,
+						bufferedIS,
+						parentArchiveName = archive.name,
+						fullParentPath = "",
+						currentDepth = 1
+					)
+				}
+		} catch (e: Throwable) {
+			return LazyArchiveResult.Fail(e, readContext.buffer, readContext.cleanUpFilesPostUse)
+		}
+		return LazyArchiveResult.Success(readContext.buffer, readContext.fullRead, readContext.cleanUpFilesPostUse)
+	}
+
+	fun peek(filter: Predicate): LazyArchiveView {
+		if (type == null) return LazyArchiveView.Fail(
 			IllegalStateException("Unsupported archive type: ${archive.name}"), emptyList()
 		)
+		val readContext = initContext<FileMeta>(filter)
+		try {
+			BufferedInputStream(FileInputStream(archive), bufferSize)
+				.use { bufferedIS ->
+					GenericArchiveReader.peekArchive(
+						readContext,
+						bufferedIS,
+						parentArchiveName = archive.name,
+						fullParentPath = "",
+						currentDepth = 1
+					)
+				}
+		} catch (e: Throwable) {
+			return LazyArchiveView.Fail(e, readContext.buffer)
+		}
+		return LazyArchiveView.Success(readContext.buffer, readContext.fullRead)
+	}
 
-		val readContext = ReadContext(
+	private fun <T> initContext(filter: Predicate): ReadContext<T> {
+		return ReadContext(
 			filter, temporaryDirectory,
 			archiveDepth = archiveDepth,
 			loopBreaker = loopBreaker,
 			errorHandler = errorHandler
 		)
-
-		try {
-			BufferedInputStream(FileInputStream(archive), bufferSize).use { bufferedIS ->
-				GeneralArchiveReader.extractArchive(
-					readContext,
-					bufferedIS,
-					parentArchiveName = archive.name,
-					fullParentPath = "",
-					currentDepth = 1
-				)
-			}
-		} catch (e: Throwable) {
-			return LazyArchiveResult.Fail(e, readContext.buffer)
-		}
-		return LazyArchiveResult.Success(readContext.buffer, readContext.fullRead)
 	}
 }
 
-class ReadContext(
+class ReadContext<T>(
 	val predicate: Predicate,
 	val temporaryDirectory: File,
 	val archiveDepth: Int,
 	val loopBreaker: Int,
 	val errorHandler: ErrorHandler?,
 ) {
-	val buffer: ArrayList<TemporaryFile> = ArrayList()
+	val buffer: ArrayList<T> = ArrayList()
+	val cleanUpFilesPostUse: ArrayList<File> = ArrayList()
 	var fullRead: Boolean = true
 	var iteration: Int = 0
 	fun nextExtractionDirectory() = File(temporaryDirectory, "extract_${buffer.size}")
@@ -76,51 +110,5 @@ class ReadContext(
 			return true
 		}
 		return false
-	}
-}
-
-sealed interface LazyArchiveResult : Closeable {
-	fun successOrThrow(): Success {
-		return when (this) {
-			is Fail -> throw this.error.also { this.close() }
-			is Success -> this
-		}
-	}
-
-	/**
-	 * Fail might occur at any point, due to this the extracted files are provided too.
-	 * Clean up them to avoid leaking them into storage.
-	 */
-	class Fail(
-		val error: Throwable,
-		/**
-		 * All extracted files up to this point
-		 */
-		val extracted: List<TemporaryFile>,
-	) : LazyArchiveResult {
-		override fun close() {
-			extracted.forEach {
-				it.file.deleteRecursively()
-				it.folderForDeletion?.deleteRecursively()
-			}
-		}
-	}
-
-	class Success(
-		/**
-		 * Extracted files located in the temporary folder, each in its own subdirectory.
-		 */
-		val extracted: List<TemporaryFile>,
-		/**
-		 * Marks the result as partial due to reaching the loopBreak value
-		 */
-		val fullRead: Boolean,
-	) : LazyArchiveResult {
-		override fun close() {
-			extracted.forEach {
-				it.file.deleteRecursively()
-				it.folderForDeletion?.deleteRecursively()
-			}
-		}
 	}
 }
