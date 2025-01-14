@@ -16,7 +16,7 @@ val reader = LazyArchiveReader(testArchive, temporaryDirectory)
 reader
     .extract { m -> m.fileName.endsWith(".txt") }
     .successOrThrow()
-    .use { result ->
+    .use { result -> // result is [Closable] which removes temporary files
         val fileResult = result.extracted.getOrNull(0) ?: throw NullPointerException("File not found")
         val file = fileResult.file
         val meta = fileResult.meta
@@ -25,7 +25,10 @@ reader
 ```
 
 ### Usage
+*NOTE: For more detailed usage examples take a look at the unit tests.*
+
 **Step 1.** Create an instance of **LazyArchiveReader**
+
 ```kotlin
 val reader = LazyArchiveReader(
     testArchive, // the file of the archive itself
@@ -75,6 +78,6 @@ This project is still in development and might never be finalised. Feel free to 
 
 ## Plans and tasks
 - Implement 7z support
-- Implement a read-only function to produce a data class that mirrors the archive structure
 - More unit tests
 - Benchmarks
+- Publish an artifact
